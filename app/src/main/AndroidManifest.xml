@@ -104,21 +104,7 @@
 
         <service android:name=".service.ServiceAnonymization"
             android:exported="false"
-            android:foregroundServiceType="dataSync">
-            <intent-filter>
-                <action android:name="it.unige.hidedroid.action.Start"/>
-                <action android:name="it.unige.hidedroid.action.Stop"/>
-            </intent-filter>
-        </service>
-
-        <receiver android:name=".receiver.CheckBatteryReceiver"
-            android:exported="false"
-            >
-            <intent-filter>
-                <action android:name="android.intent.action.ACTION_POWER_CONNECTED"/>
-                <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED"/>
-            </intent-filter>
-        </receiver>
+            android:foregroundServiceType="dataSync"/>
 
         <receiver android:name=".receiver.AppReceiver"
             android:exported="false"

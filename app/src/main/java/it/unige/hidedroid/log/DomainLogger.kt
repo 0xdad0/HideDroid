@@ -100,22 +100,6 @@ object DomainLogger {
     }
 
     /**
-     * Trims the in-Realm log table to the newest [keepCount] entries and rewrites the
-     * CSV to match. Must be called on a background thread; it is invoked from the
-     * logger executor.
-     */
-    fun prune(keepCount: Int) {
-        executor.execute {
-            try {
-                val kept = pruneRealm(keepCount)
-                rewriteCsv(kept)
-            } catch (e: Exception) {
-                LoggerHideDroid.e("DomainLogger", "Prune failed: $e")
-            }
-        }
-    }
-
-    /**
      * Drains pending entries and flushes the executor. Use sparingly (e.g. before export).
      */
     fun flush() {

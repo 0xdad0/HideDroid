@@ -110,12 +110,6 @@ class MainActivity : AppCompatActivity(), NetBareListener, PermissionListener {
         // get view model
         myViewModel = ViewModelProvider(this).get(StatusVPNViewModel::class.java)
 
-        // check permission
-        Dexter.withContext(this)
-                .withPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                .withListener(this)
-                .check()
-
         // SETUP VPN
         mNetBare = NetBare.get()
         myViewModel!!.isClicked = mNetBare.isActive
@@ -236,7 +230,7 @@ class MainActivity : AppCompatActivity(), NetBareListener, PermissionListener {
             return
         }
 
-        var config = NetBareConfig.defaultHttpConfigWithConnectivityManager(
+        val config = NetBareConfig.defaultHttpConfigWithConnectivityManager(
                 HideDroidApplication.getInstance().getJSK(),
                 interceptorFactories(dataAnonymizer),
                 HideDroidApplication.getInstance().getSystemService(Context.CONNECTIVITY_SERVICE)
@@ -270,20 +264,6 @@ class MainActivity : AppCompatActivity(), NetBareListener, PermissionListener {
 
         super.onResume()
     }
-
-    /*override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        if (requestCode == 1) {
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                val telephonyManager: TelephonyManager = this.getSystemService(Application.TELEPHONY_SERVICE) as TelephonyManager
-                if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
-                    Log.e(TAG, "Phone State permissions not given")
-                }
-            } else {
-                Toasty.warning(this, "Grant Phone Permissions to activate Incognito Mode").show()
-                this.finish()
-            }
-        }
-    }*/
 
     override fun onRestart() {
         LoggerHideDroid.i(TAG, "onRestart")

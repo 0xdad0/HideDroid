@@ -2,10 +2,10 @@ package it.unige.hidedroid
 
 import android.app.Application
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.content.SharedPreferences
 import com.dave.anonymization_data.anonymizationthreads.DataAnonymizer
+import com.dave.realmdatahelper.debug.Error as DebugError
+import com.dave.realmdatahelper.debug.Request as DebugRequest
 import com.dave.realmdatahelper.hidedroid.PackageNamePrivacyLevel
 import com.dave.realmdatahelper.realmmodules.DGHModule
 import com.dave.realmdatahelper.realmmodules.DebugModule
@@ -17,13 +17,10 @@ import com.github.megatronking.netbare.NetBare
 import com.github.megatronking.netbare.NetBareUtils
 import com.github.megatronking.netbare.ssl.JKS
 import com.google.gson.Gson
-import com.orm.SugarContext
 import io.realm.Realm
 import io.realm.RealmConfiguration
 import io.realm.kotlin.where
 import it.unige.hidedroid.activity.MainActivity
-import it.unige.hidedroid.receiver.AppReceiver
-import it.unige.hidedroid.receiver.CheckBatteryReceiver
 import it.unige.hidedroid.service.ServiceAnonymization
 import me.weishu.reflection.Reflection
 import org.json.JSONObject
@@ -37,6 +34,7 @@ class HideDroidApplication : Application() {
         const val JSK_ALIAS = "HideDroidSample"
         const val DEBUG_ENABLED_KEY = "debugEnabled"
         const val DOMAIN_BLOCKING_ENABLED_KEY = "domainBlockingEnabled"
+        private const val DEBUG_LOG_RETENTION_MS = 7L * 24 * 60 * 60 * 1000
 
         private lateinit var sInstance: HideDroidApplication
 
@@ -82,10 +80,10 @@ class HideDroidApplication : Application() {
             }
             preferences.getInt(DEBUG_ENABLED_KEY, -1) == -1 -> {
                 with(preferences.edit()) {
-                    putInt(DEBUG_ENABLED_KEY, 1) // TODO: set default to 0
+                    putInt(DEBUG_ENABLED_KEY, 0)
                     commit()
                 }
-                isDebugEnabled.set(true) // TODO: set default to false
+                isDebugEnabled.set(false)
             }
         }
 
@@ -133,9 +131,6 @@ class HideDroidApplication : Application() {
 
         NetBare.get().attachApplication(this, BuildConfig.DEBUG)
 
-        // SUGAR
-        SugarContext.init(this)
-
         // REALM DB
         Realm.init(this)
         val realmConfig = RealmConfiguration.Builder()
@@ -171,6 +166,9 @@ class HideDroidApplication : Application() {
                 .modules(DebugModule())
                 .build()
 
+        // Debug logs hold request headers/bodies: drop anything older than the retention window.
+        Thread { purgeOldDebugLogs() }.start()
+
         val realm = Realm.getDefaultInstance()
         realm.use { realm ->
             val privacyLevels = realm.where<PackageNamePrivacyLevel>().findAll()
@@ -194,24 +192,16 @@ class HideDroidApplication : Application() {
             dghFacebookKeySet.add(key)
         }
         dghBox = DataAnonymizer.DghBox(dgh, dghKeysSet, dghFacebook, dghFacebookKeySet)
-
-        this.myRegisterReceiver()
     }
 
-    fun myRegisterReceiver() {
-        val receiverBattery = CheckBatteryReceiver()
-        this.registerReceiver(receiverBattery, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-        this.registerReceiver(receiverBattery, IntentFilter(Intent.ACTION_POWER_CONNECTED))
-        this.registerReceiver(receiverBattery, IntentFilter(Intent.ACTION_POWER_DISCONNECTED))
-
-        val receiverApp = AppReceiver()
-        this.registerReceiver(receiverApp,
-                IntentFilter().apply {
-                    addAction(Intent.ACTION_PACKAGE_FULLY_REMOVED)
-                    addAction(Intent.ACTION_PACKAGE_REMOVED)
-                    addDataScheme("package")
-                }
-        )
+    private fun purgeOldDebugLogs() {
+        val cutoff = System.currentTimeMillis() - DEBUG_LOG_RETENTION_MS
+        Realm.getInstance(realmConfigLog).use { realm ->
+            realm.executeTransaction { r ->
+                r.where<DebugRequest>().lessThan("timeStamp", cutoff).findAll().deleteAllFromRealm()
+                r.where<DebugError>().lessThan("timeStamp", cutoff).findAll().deleteAllFromRealm()
+            }
+        }
     }
 
     fun getJSK(): JKS {

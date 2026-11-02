@@ -19,7 +19,6 @@ import it.unige.hidedroid.interceptor.UtilsHttpInterceptor.fromMapToString
 import it.unige.hidedroid.log.DomainLogger
 import it.unige.hidedroid.log.LoggerHideDroid
 import it.unige.hidedroid.realmdatahelper.TrackersMappingDomainName
-import it.unige.hidedroid.realmdatahelper.UtilitiesStoreDataOnRealmDb
 import it.unige.hidedroid.utils.DomainAnonymizationHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -130,18 +129,15 @@ class HttpInterceptor(var packageManager: PackageManager,
                                 false
                         )
                         // The request is not forwarded, so answer it ourselves on the first
-                        // packet or the connection hangs until the app's timeout. Only
-                        // HTTP/1.x can take a raw HTTP/1.1 response; HTTP/2 streams stay
-                        // silently dropped.
-                        // ponytail: h2 blocked streams get no RST_STREAM, apps see a
-                        // stalled stream until their own timeout; add frame injection
-                        // if that becomes a problem.
-                        if (chain.request().streamId() == -1) {
-                            try {
-                                chain.injectResponse(BLOCKED_RESPONSE)
-                            } catch (e: IOException) {
-                                LoggerHideDroid.e(TAG, "Failed to answer blocked request to $host: $e")
-                            }
+                        // packet or the connection hangs until the app's timeout.
+                        // HTTP/2 streams get an RST_STREAM(REFUSED_STREAM) instead.
+                        val streamId = chain.request().streamId()
+                        try {
+                            chain.injectResponse(
+                                    if (streamId == -1) BLOCKED_RESPONSE
+                                    else UtilsHttpInterceptor.rstStreamFrame(streamId))
+                        } catch (e: IOException) {
+                            LoggerHideDroid.e(TAG, "Failed to answer blocked request to $host: $e")
                         }
                     }
                     LoggerHideDroid.d(TAG, "Blocking request to $host from $packageNameApp")
@@ -181,6 +177,15 @@ class HttpInterceptor(var packageManager: PackageManager,
                         var contentLength = 0
                         if (requestHeaders != null && requestHeaders["Content-Length"] != null) {
                             contentLength = requestHeaders["Content-Length"]?.component1()?.toInt()!!
+                        }
+
+                        if (isDebugEnabled.get() && contentLength > 0 && byteBuffer.size < contentLength) {
+                            // Body split across packets: only the first segment is seen here, so the anonymizer
+                            // works on a partial body. Make the gap visible in the debug log.
+                            try {
+                                storeDebugError(packageNameApp, host, requestHeadersString ?: "", "",
+                                        "partial body: ${byteBuffer.size}/$contentLength bytes in first packet")
+                            } catch (e: Exception) { /* ignore */ }
                         }
 
                         // Controllo che il pacchetto non contenga audio/immagini/video/3Dmodel/font
@@ -229,10 +234,8 @@ class HttpInterceptor(var packageManager: PackageManager,
                                 }
                                 //---------- Flurry ----------
                                 host == "data.flurry.com" -> {
-                                    // TODO: non sono ancora riuscito a testare se funzioni correttamente
                                     val bodyDecoded = UtilsHttpInterceptor.extractReadableBytes(Unpooled.wrappedBuffer(byteBuffer))?.let { String(it, StandardCharsets.UTF_8).replace("[^\\x20-\\x7e]".toRegex(), "") }
                                     val bodyDecodedAndParsed = bodyDecoded!!.replace("\\},(?![\\s\"\\}])(.*?)\\{|\\}[^,]{0,10},(?=\\{)\\{|\\}(?!\\})[^,]*\\{".toRegex(), "},{")
-                                    bodyDecodedAndParsed.substring(bodyDecodedAndParsed.indexOf('{'), bodyDecodedAndParsed.lastIndexOf('}') + 1)
                                     try {
                                         bodyString = URLDecoder.decode(bodyDecodedAndParsed, "UTF-8")
                                         bodyWithoutNotAsciiChar = bodyString
@@ -280,8 +283,8 @@ class HttpInterceptor(var packageManager: PackageManager,
                                 else -> {
                                     var data = ""
                                     try {
-                                        data = String(byteBuffer).replace("%(?![0-9a-fA-F]{2})", "%25")
-                                        data = data.replace("\\+", "%2B")
+                                        // Escape stray '%' so URLDecoder does not throw on non-form bodies.
+                                        data = String(byteBuffer).replace("%(?![0-9a-fA-F]{2})".toRegex(), "%25")
                                         bodyString = URLDecoder.decode(data, "UTF-8")
                                     } catch (e: Exception) {
                                         if (isDebugEnabled.get()) {
@@ -320,9 +323,6 @@ class HttpInterceptor(var packageManager: PackageManager,
                                 body = bodyWithoutNotAsciiChar
                                 chain.process(buffer)
                             }
-
-                            Log.d(TAG, "$host, $packageNameApp,  " +
-                                    "size request ${UtilitiesStoreDataOnRealmDb.getEventBufferFromPackageName(packageNameApp, host).event.size}")
 
                             LoggerHideDroid.d(TAG, "Request Host : ${host}, Package Name: $packageNameApp")
 
@@ -410,23 +410,8 @@ class HttpInterceptor(var packageManager: PackageManager,
     }
 
     override fun intercept(chain: HttpResponseChain, buffer: ByteBuffer, index: Int) {
+        // Responses are forwarded untouched and deliberately never logged: they carry user data.
         chain.process(buffer)
-        var isPrivate = false
-        val responseDomainOverride = DomainAnonymizationHelper.getByHost(chain.response().host())
-        var isTracked = responseDomainOverride?.enabled
-                ?: this.trackersMappingDomainName.isUrlPresent(chain.response().host())
-        val realm = Realm.getInstance(realmConfigPrivateTracker)
-        realm.use { realm ->
-            val realmResult = realm.where<PrivateTracker>().equalTo("host", chain.response().host()).findFirst()
-            if (realmResult != null) {
-                isPrivate = true
-            }
-        }
-        if (isTracked || isPrivate) {
-            if (index == 0) {
-                Log.d(TAG, "Response from ${chain.response().host()}:\n${String(buffer.array(), StandardCharsets.UTF_8)}")
-            }
-        }
     }
 
     private fun storeDebugRequest(id: Long, packageName: String, host: String, headers: String,

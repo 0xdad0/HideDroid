@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.regex.Matcher
 import java.util.regex.Pattern
 import java.util.zip.GZIPOutputStream
-import java.util.zip.InflaterOutputStream
+import java.util.zip.DeflaterOutputStream
 
 /**
  * Classe che:
@@ -170,7 +170,7 @@ class BodyParser {
 
     private fun compressContents(fullMessage: ByteArray, type: String, packageNameApp: String, host: String, headers: String,
                                  isDebugEnabled: AtomicBoolean): ByteArray? {
-        var writerDeflate: InflaterOutputStream? = null
+        var writerDeflate: DeflaterOutputStream? = null
         var writerGzip: GZIPOutputStream? = null
         val compress = ByteArrayOutputStream()
         try {
@@ -179,7 +179,7 @@ class BodyParser {
                 writerGzip.write(fullMessage)
                 writerGzip.flush()
             } else if (type.equals("deflate", ignoreCase = true)) {
-                writerDeflate = InflaterOutputStream(compress)
+                writerDeflate = DeflaterOutputStream(compress)
                 writerDeflate.write(fullMessage)
                 writerDeflate.flush()
             }

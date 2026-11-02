@@ -128,7 +128,10 @@ class DataAnonymizer : Runnable {
                     var headersString = ""
                     val headersJsonObject = JSONObject(eventGeneralized.headers!!)
                     for (key in headersJsonObject.keys()) {
-                        headersString += ("$key: ${headersJsonObject.getJSONArray(key).getString(0)}\n")
+                        // The body was re-encoded, so its length changed: keep Content-Length consistent.
+                        val value = if (key.equals("Content-Length", ignoreCase = true)) packet.size.toString()
+                                    else headersJsonObject.getJSONArray(key).getString(0)
+                        headersString += ("$key: $value\n")
                     }
                     headersString += "\n"
                     box.method = HttpMethod.parse(eventGeneralized.method!!)

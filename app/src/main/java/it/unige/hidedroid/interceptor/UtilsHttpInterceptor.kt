@@ -1,7 +1,6 @@
 package it.unige.hidedroid.interceptor
 
 import android.util.Log
-import com.github.megatronking.netbare.http.HttpRequestChain
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import io.netty.buffer.ByteBuf
@@ -28,78 +27,6 @@ object UtilsHttpInterceptor {
         val gson = Gson()
         val type: Type = object : TypeToken<MutableMap<String?, List<String>?>>() {}.type
         return gson.toJson(map, type)
-    }
-
-    fun fromStringToMap(mapString: String?): MutableMap<String?, List<String>?>? {
-        if (mapString == null) {
-            return null
-        }
-        val gson = Gson()
-        val type: Type = object : TypeToken<MutableMap<String?, List<String>?>?>() {}.type
-        return gson.fromJson<MutableMap<String?, List<String>?>>(mapString, type)
-    }
-
-    fun parsingContentTypeApplicationXwwwFormUrlEncode(body: String): MutableMap<String, String> {
-        var map = mutableMapOf<String, String>()
-        body.split("&").forEach {
-            map[it.split("=")[0]] = it.split("=")[1]
-        }
-        return map
-    }
-
-    fun parsingContentTypeMultipartFormData(body: String, boundary: String): MutableMap<String, List<String>> {
-        /*
-            --3i2ndDfv2rTHiSisAbouNdArYfORhtTPEefj3q2f
-            Content-Disposition: form-data; name="installer_package"
-
-            com.google.android.packageinstaller
-         */
-        var mapMultipart = mutableMapOf<String, List<String>>()
-        val listPart = body.split(boundary) // split request basing on boundary value
-        listPart.forEach { value ->
-            // extract nameParameter
-            val patternNameParameter = " name=\"\\w*\"".toRegex()
-            val parameterComplex = patternNameParameter.find(value)
-            // extract valueParameter
-            val patternParameterValue = "\n.*\n--".toRegex()
-            val parameterComplexValue = patternParameterValue.find(value)
-            if (parameterComplex?.value != null && parameterComplexValue != null) {
-                val nameParameter = parameterComplex.value.split("=")[1].replace("\"", "")
-                val valueParameter = parameterComplexValue.value.replace("--", "").trim()
-                println("$nameParameter=$valueParameter")
-                mapMultipart[nameParameter] = listOf(valueParameter)
-            }
-
-        }
-        return mapMultipart
-    }
-
-    fun extractContentTypeFromHeaderString(header: String): String? {
-        val mapHeader = fromStringToMap(header)
-        var contentType: String? = null
-        if (mapHeader != null && mapHeader.containsKey("Content-Type")) {
-            contentType = mapHeader["Content-Type"]!![0].split(";")[0]
-        }
-        return contentType
-    }
-
-    fun extractBoundary(header: String): String? {
-        val mapHeader = fromStringToMap(header)
-        var boundary: String? = null
-        if (mapHeader != null && mapHeader.containsKey("Content-Type")) {
-            boundary = mapHeader["Content-Type"]!![0].split(";")[1].split("=")[1]
-        }
-        return boundary
-    }
-
-    fun isAnalyticsRequest(buffer: ByteArray): Boolean {
-        val bufferString = String(buffer, StandardCharsets.UTF_8)
-        return bufferString.contains("event", true)
-                .or(bufferString.contains("events", true))
-    }
-
-    fun isNotLoginRequest(request: HttpRequestChain, buffer: ByteArray): Boolean {
-        return request.request().host() != "graph.facebook.com" && !isAnalyticsRequest(buffer)
     }
 
     // Funzione utile ad eliminare i byte a 0 in eccesso
@@ -156,4 +83,10 @@ object UtilsHttpInterceptor {
         content.resetReaderIndex()
         return binaryContent
     }
+
+    /** HTTP/2 RST_STREAM(REFUSED_STREAM) frame: 9-byte header (len=4, type=3, flags=0, stream id) + error code 7. */
+    fun rstStreamFrame(streamId: Int): ByteArray = byteArrayOf(
+            0, 0, 4, 3, 0,
+            (streamId ushr 24 and 0x7f).toByte(), (streamId ushr 16).toByte(), (streamId ushr 8).toByte(), streamId.toByte(),
+            0, 0, 0, 7)
 }

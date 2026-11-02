@@ -38,7 +38,4 @@ dependencies {
     androidTestImplementation 'androidx.test.ext:junit:1.1.2'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.3.0'
 
-    // database sugar
-    implementation 'com.github.satyan:sugar:1.5'
-    implementation 'com.beust:klaxon:5.6'
 }

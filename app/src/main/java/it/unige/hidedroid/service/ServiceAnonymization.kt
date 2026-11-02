@@ -7,7 +7,6 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
 import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.IBinder
@@ -24,11 +23,7 @@ import java.util.concurrent.locks.ReentrantLock
 
 class ServiceAnonymization : Service() {
 
-    val ACTION_START = "it.unige.hidedroid.action.Start"
-    val ACTION_STOP = "it.unige.hidedroid.action.Stop"
-
     lateinit var isActive: AtomicBoolean
-    lateinit var preferences: SharedPreferences
     lateinit var listener: ServiceAnonymizationChangeStatus
     lateinit var realmConfigDGH: RealmConfiguration
 
@@ -59,7 +54,6 @@ class ServiceAnonymization : Service() {
         LoggerHideDroid.d(TAG, "OnCreate Service")
         super.onCreate()
 
-        preferences = this.getSharedPreferences(getString(R.string.preference_file_key), Context.MODE_PRIVATE)
         isActive = AtomicBoolean(false)
         listener = (this.application as HideDroidApplication).serviceAnonymizationChangeStatusListener
         realmConfigDGH = (this.application as HideDroidApplication).realmConfigDGH

@@ -71,6 +71,15 @@ public class RepackageTask extends AbstractTask {
         // be trusted as soon as the app is selected. The trust check only ever
         // looks at the base APK's own network security config, so it runs
         // before any split merging.
+        try {
+            java.util.List<String> pinning = it.unige.hidedroid.utils.PinningDetector.INSTANCE.detect(f);
+            if (!pinning.isEmpty()) {
+                info("WARNING: certificate pinning suspected (" + pinning + "); TLS traffic will probably stay unreadable even after repackaging");
+            }
+        } catch (Exception e) {
+            log(Level.WARNING, "Pinning detection failed", e);
+        }
+
         boolean appAlreadyRepackaged = UserCertTrustChecker.apkTrustsUserCertificates(this.ctx.getApplicationContext(), f);
         if (appAlreadyRepackaged) {
             info("APK already trusts user certificates; skipping repackaging");

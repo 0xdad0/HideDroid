@@ -21,16 +21,4 @@ object Animators {
         }
         return animator
     }
-
-    fun makeDeterminateCircularPrimaryAndSecondaryProgressAnimator(
-            progressBars: MutableList<MaterialProgressBar>): ValueAnimator {
-        val animator = makeDeterminateCircularPrimaryProgressAnimator(progressBars)
-        animator.addUpdateListener { animator ->
-            val value = Math.round(1.25f * animator.animatedValue as Int)
-            for (progressBar in progressBars) {
-                progressBar.secondaryProgress = value
-            }
-        }
-        return animator
-    }
 }
